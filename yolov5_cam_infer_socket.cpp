@@ -6,17 +6,19 @@
 #include "common.hpp"
 #include "utils.h"
 #include "calibrator.h"
-#define USE_FP16  // set USE_INT8 or USE_FP16 or USE_FP32
-#define DEVICE 0  // GPU id
-#define NMS_THRESH 0.4
-#define CONF_THRESH 0.5
-#define BATCH_SIZE 1
 
+#include <string.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 
+#define USE_FP16  // set USE_INT8 or USE_FP16 or USE_FP32
+#define DEVICE 0  // GPU id
+#define NMS_THRESH 0.4
+#define CONF_THRESH 0.5
+#define BATCH_SIZE 1
 
 // stuff we know about the network and the input/output blobs
 static const int INPUT_H = Yolo::INPUT_H;
@@ -38,22 +40,12 @@ void doInference(IExecutionContext& context, cudaStream_t& stream, void **buffer
 }
 
 
-extern "C" 
-void infer(int argc, char** argv) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    //向服务器（特定的IP和端口）发起请求
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, 0, sizeof(serv_addr));  //每个字节都用0填充
-    serv_addr.sin_family = AF_INET;  //使用IPv4地址
-    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  //具体的IP地址
-    serv_addr.sin_port = htons(1234);  //端口
-    connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
 
-
+int main(int argc, char** argv) {
     cudaSetDevice(DEVICE);
+    // cv::VideoCapture capture("rtsp://192.168.0.119:554/user=admin&password=&channel=1&steam=0.sdp?");
     cv::VideoCapture capture(0);
-
     std::string wts_name = "";
     std::string engine_name = "my_yolo.engin";
 
@@ -100,7 +92,22 @@ void infer(int argc, char** argv) {
     CUDA_CHECK(cudaStreamCreate(&stream));
 
 
-   char buffer[40];
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    //向服务器（特定的IP和端口）发起请求
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));  //每个字节都用0填充
+    serv_addr.sin_family = AF_INET;  //使用IPv4地址
+    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  //具体的IP地址
+    serv_addr.sin_port = htons(1234);  //端口
+
+
+    while (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr))<0)
+    {std::cout<<"connect error"<<std::endl;
+     sleep(1);
+    }
+    int nums;
+    
+    
     while(true){
 
         cv::Mat img;
@@ -134,38 +141,58 @@ void infer(int argc, char** argv) {
         nms(res, &prob[0], CONF_THRESH, NMS_THRESH);
         
 
-
+    
         for (size_t j = 0; j < res.size(); j++) {
             cv::Rect r = get_rect(img, res[j].bbox);
             cv::rectangle(img, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
             cv::putText(img, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
         }
 
-        char str[100];
-    
 
-        std::cout<<"result size"<<res.size()<<std::endl;
+        // std::cout<<"result size"<<res.size()<<std::endl;
 
-        for (int j = 0; j < 100; j++) {
-            if(j<res.size())str[j]=res[j].class_id+'0';
-            else str[j]='n';
-        }
+        std::string result;
+        
+
+        nums=0;
+        for (int i = 0; i < res.size(); i++) 
+        {
+        nums+=1;
+        cv::Rect r = get_rect(img, res[i].bbox);
+        result+=std::to_string((int)res[i].class_id)+' ';
+        result+=std::to_string(r.x)+' ';
+        result+=std::to_string(r.y)+' ';
+        result+=std::to_string(r.width)+' ';
+        result+=std::to_string(r.height)+' ';
        
-    
+        
+        }
+        result=std::to_string(nums)+' '+result;
+
+        char *data=new char [100];
+        
 
 
-        write(sock, str, sizeof(str));
+        strcpy(data,result.c_str()); 
+              
+        std::cout<<data<<std::endl;
 
+        char buffer[40];
+        write(sock, data, sizeof(data));
+
+  
         read(sock, buffer, sizeof(buffer)-1);
     
-        std::cout<<"Message form server:"<<buffer<<std::endl;
+        std::cout<<"Message form server: "<< buffer<<std::endl;
 
 
-    }
-    // cv::imshow("test",img);
-    // cv::waitKey(0);
+
+
+        
+        // cv::imshow("test",img);
+        // cv::waitKey(1);
   
-    // }
+    }
     // Release stream and buffers
     cudaStreamDestroy(stream);
     CUDA_CHECK(cudaFree(buffers[inputIndex]));
@@ -174,9 +201,8 @@ void infer(int argc, char** argv) {
     context->destroy();
     engine->destroy();
     runtime->destroy();
-    capture.release();
+    close(sock);
 
 
-
-    // return p;
+    return 0;
 }
