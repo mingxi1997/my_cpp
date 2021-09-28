@@ -4,7 +4,32 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+
+
+
+//写在main函数内
+#include <signal.h>
+#include<iostream>
+#include<string>
+void handle_pipe(int sig)
+{
+}
+
+
+
+using namespace std;
 int main(){
+ 
+    
+    struct sigaction action;
+    action.sa_handler = handle_pipe;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    sigaction(SIGPIPE, &action, NULL);
+
+
+
     //创建套接字
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     //向服务器（特定的IP和端口）发起请求
@@ -17,22 +42,53 @@ int main(){
    
     //读取服务器传回的数据
     char buffer[40];
-    char str[] = "ni hao";
-    connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-    while(true){
-    
-    
-    
-    write(sock, str, sizeof(str));
 
   
+    connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-
-    read(sock, buffer, sizeof(buffer)-1);
    
-    printf("Message form server: %s\n", buffer);
+  
+
+    while(true)
+    {
     
-    sleep(1);
+        char str[] = "ni hao hee";
+    
+        int x=write(sock, str, sizeof(str));
+
+        if(x!=-1)
+
+        {
+            
+            read(sock, buffer, sizeof(buffer)-1);
+        
+            cout<<"Message form server: "<<buffer<<endl;
+            
+            sleep(1);
+        }
+        else 
+        {
+            std::cout<<x<<"error"<<std::endl;
+            close(sock);
+            sleep(3);
+
+ 
+            
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+           
+
+            sleep(1);
+
+            x=write(sock, str, sizeof(str));
+            std::cout<<"new x is"<<x<<std::endl;
+          
+            
+        }
+
+
+
+
     }
     close(sock);
    
