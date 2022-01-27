@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     cv::VideoCapture capture(0);
 
     std::string wts_name = "";
-    std::string engine_name = "my_yolo.engin";
+    std::string engine_name = "my_yolo.engine";
 
 
     std::ifstream file(engine_name, std::ios::binary);
